@@ -3,6 +3,7 @@ import requests
 import pdfplumber   
 from dotenv import load_dotenv
 import os
+from utils.groq_api import query_groq
 
 # Load API key
 load_dotenv()
