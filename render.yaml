@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: bhashaai-app
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "groq_api.py"  # change this to your main file
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
