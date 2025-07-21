@@ -1,12 +1,16 @@
-# utils/groq_api.py
 import os
-from dotenv import load_dotenv
 import requests
+import streamlit as st
+from dotenv import load_dotenv
 
-# Load from .env
+# Load from .env if present (for local use)
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# First priority: .env, fallback to Streamlit/Render secrets
+GROQ_API_KEY = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY", None)
+
+if not GROQ_API_KEY:
+    raise ValueError("🚨 GROQ_API_KEY not found! Please set it in .env or Render secrets.")
 
 def query_groq(prompt, language="Hindi"):
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -14,7 +18,6 @@ def query_groq(prompt, language="Hindi"):
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
-
     data = {
         "model": "llama3-70b-8192",
         "messages": [
@@ -26,10 +29,17 @@ def query_groq(prompt, language="Hindi"):
     }
 
     response = requests.post(url, headers=headers, json=data)
-    
-    # Safe access with error handling
+
     try:
-        return response.json()["choices"][0]["message"]["content"]
+        res_json = response.json()
+        if "choices" in res_json:
+            return res_json["choices"][0]["message"]["content"]
+        elif "error" in res_json:
+            st.error(f"Groq API Error: {res_json['error'].get('message', 'Unknown error')}")
+        else:
+            st.error("Invalid response format from Groq API.")
+        return None
     except Exception as e:
-        print("❌ Error parsing Groq response:", response.text)
-        raise e
+        st.error("❌ Failed to parse Groq API response.")
+        st.text(response.text)
+        return None

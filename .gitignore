@@ -1,1 +1,1 @@
-.env 
+-e "__pycache__/\n*.py[cod]\n*.env\n.env\nsecrets.toml\n.streamlit/secrets.toml\n.vscode/\n.DS_Store" 

@@ -1,11 +1,9 @@
 services:
   - type: web
-    name: bhashaai-app
-    env: python
-    region: oregon
-    plan: free
+    name: bhashaai
+    runtime: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "groq_api.py"  # change this to your main file
+    startCommand: "streamlit run pages/app.py"
     envVars:
       - key: GROQ_API_KEY
-        sync: false
+        sync: false  # You will set it manually in the Render dashboard
