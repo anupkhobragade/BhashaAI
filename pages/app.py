@@ -3,6 +3,8 @@ import requests
 import pdfplumber
 import os
 import sys
+from io import BytesIO
+from gtts import gTTS
 
 # Fix path issues when deploying
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -58,6 +60,12 @@ language_prompts = {
     "Odia": "ସହଜ ଓ ବୁଝିପାରିବା ଓଡ଼ିଆ"
 }
 
+# TTS language codes
+lang_codes = {
+    "Hindi": "hi", "Marathi": "mr", "Bengali": "bn", "Telugu": "te", "Tamil": "ta",
+    "Urdu": "ur", "Gujarati": "gu", "Malayalam": "ml", "Kannada": "kn", "Odia": "or"
+}
+
 # Process request
 if text.strip():
     if st.button("🧠 Explain in " + language):
@@ -73,5 +81,19 @@ if text.strip():
             if output:
                 st.subheader(f"🔍 {language} में व्याख्या:")
                 st.write(output)
+
+                # --- TTS Voice Support ---
+                try:
+                    lang_code = lang_codes.get(language, "hi")
+                    tts = gTTS(output, lang=lang_code)
+                    audio_bytes = BytesIO()
+                    tts.write_to_fp(audio_bytes)
+                    audio_bytes.seek(0)
+
+                    st.audio(audio_bytes, format="audio/mp3")
+                    st.success("🎧 Voice generated successfully!")
+                except Exception as e:
+                    st.warning("⚠️ Could not generate voice output.")
+                    st.exception(e)
 else:
     st.info("कृपया PDF अपलोड करें या टेक्स्ट पेस्ट करें।")
