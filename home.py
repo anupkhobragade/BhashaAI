@@ -5,26 +5,27 @@ from PIL import Image
 st.sidebar.image("bhasha_logo.png", width=150)
 
 # Page config
-st.set_page_config(page_title="BhashaAI App – भारत का अपना ChatGPT", layout="centered")
+st.set_page_config(page_title="BhashaAI – भारत का अपना ChatGPT", layout="centered")
 
 # Title & Tagline
-st.title("BhashaAI – भारत का Apna ChatGPT")
-st.markdown("🧠 Simplifying English, Legal & Government Docs into your regional language")
+st.title("📘 BhashaAI – भारत का अपना ChatGPT")
+st.markdown("🧠 Explain English, Legal, or Govt Docs in your Indian Language")
 
 # Features
-st.markdown("✨ Key Features:")
+st.markdown("✨ Features:")
 st.markdown("""
-- 📄 Accepts **PDFs or Pasted Text**
-- 🌐 Converts to **10 different Indian languages**
-- 🧾 Perfect for **Forms, Government Notices, Legal Docs**
-- ⚡ Powered by fast, free **Open Source LLMs**
-- 📲 **No login or signup** needed
+- 📄 Upload PDFs or Paste Text  
+- 🌐 Translate to **10 Indian languages**  
+- 🔊 Listen to translated text with **Voice Support**  
+- 🧾 Perfect for **Forms, Government Notices, Legal Docs**  
+- ⚡ Powered by open source AI models  
+- ✅ No login or signup needed  
 """)
 
 # Supported Languages
-st.markdown("🌐 Supported Languages:")
+st.markdown("🌍 Supported Languages:")
 st.markdown("""
-- 💎Hindi  
+- 💎 Hindi  
 - 🌸 Marathi  
 - 🏵️ Bengali  
 - 🌿 Telugu  
@@ -37,22 +38,26 @@ st.markdown("""
 """)
 
 # Who it's for
-st.markdown("🎯 Who is this for?")
+st.markdown("🎯 Ideal Users:")
 st.markdown("""
-- 👵 Senior Citizens struggling with English forms  
-- 🧑‍🌾 Farmers receiving government letters  
-- 👨‍💻 Students dealing with academic PDFs  
-- 🧑‍⚖️ Common citizens reading legal/official documents  
-- 📑 Anyone who wants **simple explanations**  
+- 👵 Senior Citizens  
+- 🧑‍🌾 Farmers  
+- 👨‍🎓 Students  
+- 🧑‍⚖️ Common citizens with official documents  
+- 📑 Anyone wanting **simple explanations**  
 """)
 
-# Screenshot or Try Now
-st.markdown("🚀 Try the App")
-st.markdown("[👉 Launch Now](https://bhashaai.streamlit.app)")
+# App Access
+st.markdown("🚀 Launch the App:")
+st.markdown("""
+- ▶️ [Try on Streamlit](https://bhashaai.streamlit.app)
+- 🌐 [Render Deployment](https://bhashaai.onrender.com)
+""")
 
 # Optional Screenshot
 # img = Image.open("preview.png")
 # st.image(img, use_column_width=True)
+
 # Footer
 st.markdown("---")
-#st.markdown("📬 Contact: [anupkhobragade@gmail.com](mailto:anupkhobragade@gmail.com)  |  Built in Pune, MH | भारत")
+st.markdown("📬 Contact: [anupkhobragade@gmail.com](mailto:anupkhobragade@gmail.com)  |  Built in Pune 🇮🇳")
