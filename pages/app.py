@@ -10,6 +10,18 @@ from gtts import gTTS
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.groq_api import query_groq
 
+# Inject PWA manifest and icons
+st.markdown("""
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png">
+<meta name="theme-color" content="#0b5cd1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BhashaAI">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="/icon-192.png">
+""", unsafe_allow_html=True)
+
 # Streamlit config
 st.set_page_config(page_title="BhashaAI", layout="wide")
 st.sidebar.image("bhasha_logo.png", width=150)
