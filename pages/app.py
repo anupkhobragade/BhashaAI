@@ -574,12 +574,27 @@ if text.strip():
 else:
     st.info("कृपया PDF अपलोड करें या टेक्स्ट पेस्ट करें।")
 
-    # Footer
-st.markdown("""---""")
-st.markdown(
-    "<div style='text-align: center; font-size: 14px; color: grey;'>"
-    "📬 Contact: <a href='mailto:anupkhobragade@gmail.com'>anupkhobragade@gmail.com</a>  |  Built in Pune 🇮🇳<br>"
-    # "Made with ❤️ using Streamlit & OpenAI"
-    "</div>",
-    unsafe_allow_html=True
-)
+# Fixed Footer
+footer_html = """
+<style>
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: white;
+    padding: 10px;
+    text-align: center;
+    font-size: 14px;
+    color: #444;
+    border-top: 1px solid #ccc;
+    z-index: 100;
+}
+</style>
+<div class="footer">
+    📬 Contact: <a href='mailto:anupkhobragade@gmail.com'>anupkhobragade@gmail.com</a> | Built in Pune 🇮🇳<br>
+    © 2025 BhashaAI. All rights reserved. 
+</div>
+"""
+
+st.markdown(footer_html, unsafe_allow_html=True)
