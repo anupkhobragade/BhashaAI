@@ -12,8 +12,6 @@ import requests
 import pdfplumber
 from gtts import gTTS
 
-# Fix path issues when deploying
-
 from utils.groq_api import query_groq
 from utils.visitor_tracker import log_visit, get_today_count
 
@@ -94,6 +92,14 @@ lang_codes = {
 
 # PDF Generator
 class UnicodePDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
+        if not os.path.exists(font_path):
+            raise FileNotFoundError("Font file missing. Please ensure 'NotoSansDevanagari-Regular.ttf' is in the assets/ folder.")
+        self.add_font("Noto", "", font_path, uni=True)
+        self.set_font("Noto", size=12)
+
     def header(self):
         self.set_font("Noto", size=12)
 
@@ -104,16 +110,7 @@ class UnicodePDF(FPDF):
 
 def generate_pdf(text):
     pdf = UnicodePDF()
-
-    font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
-    if not os.path.exists(font_path):
-        raise FileNotFoundError("Font file missing. Please ensure 'NotoSansDevanagari-Regular.ttf' is in the assets/ folder.")
-
-    pdf.add_font("Noto", "", font_path, uni=True)
-    pdf.set_font("Noto", size=12)
-
     pdf.add_page()
-
     for line in text.split('\n'):
         pdf.multi_cell(0, 10, line)
 
