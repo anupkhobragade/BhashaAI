@@ -1,9 +1,7 @@
 import os
 import sys
 os.environ["STREAMLIT_WATCH_FILE_SYSTEM"] = "false"
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import csv
 from datetime import datetime
 from io import BytesIO
@@ -112,24 +110,33 @@ class UnicodePDF(FPDF):
 # Corrected PDF Generator
 def generate_pdf(text):
     pdf = UnicodePDF()
-
-    font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
-    if not os.path.exists(font_path):
-        raise FileNotFoundError("Font file missing. Please ensure 'NotoSansDevanagari-Regular.ttf' is in the assets/ folder.")
-
-    pdf.add_font("Noto", "", font_path, uni=True)
-    pdf.set_font("Noto", size=12)
     pdf.add_page()
 
-    max_width = 100  # characters per line for wrapping
-    for paragraph in text.split("\n\n"):
-        lines = wrap(paragraph.strip(), width=max_width)
-        for line in lines:
-            pdf.multi_cell(0, 10, line, align='L')
-        pdf.ln(5)
+    # Load Devanagari-capable font
+    font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
+    if not os.path.exists(font_path):
+        raise FileNotFoundError("Font file missing: assets/NotoSansDevanagari-Regular.ttf")
 
+    pdf.add_font("Noto", "", font_path, uni=True)
+    pdf.set_font("Noto", size=14)
+
+    # Set margins and cell width
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_left_margin(15)
+    pdf.set_right_margin(15)
+
+    # Write full paragraphs (not character-by-character)
+    lines = text.split("\n")
+    for line in lines:
+        if line.strip():
+            pdf.multi_cell(0, 10, line.strip())
+            pdf.ln(1)
+        else:
+            pdf.ln(5)
+
+    # Return as byte stream
     output = BytesIO()
-    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    pdf_bytes = pdf.output(dest="S").encode("latin1")
     output.write(pdf_bytes)
     output.seek(0)
     return output
