@@ -543,20 +543,23 @@ if text.strip():
                 st.subheader(f"🔍 {language} में व्याख्या:")
                 st.write(output)
 
-                # Download PDF
-                pdf_file = generate_pdf(output, language)
-                if pdf_file is not None:
-                    st.download_button(
-                        label="⬇️ Download as PDF",
-                        data=pdf_file,
-                        file_name="bhashaai_output.pdf",
-                        mime="application/pdf"
-                    )
+                # PDF Download - Only for Hindi and Marathi (Devanagari script supported)
+                if language in ["Hindi", "Marathi"]:
+                    pdf_file = generate_pdf(output, language)
+                    if pdf_file is not None:
+                        st.download_button(
+                            label="⬇️ Download as PDF",
+                            data=pdf_file,
+                            file_name="bhashaai_output.pdf",
+                            mime="application/pdf"
+                        )
+                    else:
+                        st.error("⚠️ Could not generate PDF. Please try again.")
                 else:
-                    st.error("⚠️ Could not generate PDF. Please try again.")
-                    st.info("💡 Tip: Try using shorter text or a different language.")
+                    # Show info for non-Devanagari languages
+                    st.info(f"💡 PDF download is currently available only for Hindi and Marathi. {language} content is displayed above with voice support.")
 
-                # Voice Support
+                # Voice Support (available for all languages)
                 try:
                     lang_code = lang_codes.get(language, "hi")
                     tts = gTTS(output, lang=lang_code)
