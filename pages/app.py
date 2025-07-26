@@ -1,14 +1,23 @@
+import os
+os.environ["STREAMLIT_WATCH_FILE_SYSTEM"] = "false"
 import streamlit as st
 import requests
 import pdfplumber
-import os
 import sys
 from io import BytesIO
 from gtts import gTTS
+from fpdf import FPDF
 
 # Fix path issues when deploying
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.groq_api import query_groq
+from utils.visitor_tracker import log_visit, get_today_count
+
+# Log and show visitor count
+log_visit()
+st.set_page_config(page_title="BhashaAI", layout="wide")
+st.sidebar.image("bhasha_logo.png", width=150)
+st.sidebar.success(f"👁️ Today's Visitors: {get_today_count()}")
 
 # Inject PWA manifest and icons
 st.markdown("""
@@ -21,10 +30,6 @@ st.markdown("""
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="apple-touch-icon" href="/icon-192.png">
 """, unsafe_allow_html=True)
-
-# Streamlit config
-st.set_page_config(page_title="BhashaAI", layout="wide")
-st.sidebar.image("bhasha_logo.png", width=150)
 
 # Branding
 st.markdown("""
@@ -61,38 +66,53 @@ else:
 # Language prompt map
 language_prompts = {
     "Hindi": "सरल और आसान हिंदी",
-    "Marathi": "सोप्या आणि समजण्यासारख्या मराठीत",
+    "Marathi": "सोप्या आणि समजण्यासारख्य मराठीत",
     "Bengali": "সহজ এবং বোধগম্য বাংলা",
-    "Telugu": "సులభంగా అర్థమయ్యే తెలుగు",
-    "Tamil": "எளிமையான மற்றும் புரிந்துகொள்ளக்கூடிய தமிழ்",
+    "Telugu": "సులభంగా అర్థమయ్య తెలుగు",
+    "Tamil": "எளிமையான மற்றும் புரிந்துகோள்ள தமிழ்",
     "Urdu": "سادہ اور قابل فہم اردو",
-    "Gujarati": "સરળ અને સમજમાં આવતી ગુજરાતી",
-    "Malayalam": "എളുപ്പവും മനസ്സിലാകുന്നതുമായ മലയാളം",
+    "Gujarati": "સરળ અને સમજમા આવતી ગુજરાતી",
+    "Malayalam": "എളുപ്പും മനസ്സിലാകുന്നതായ മലയാളം",
     "Kannada": "ಸರಳ ಮತ್ತು ಅರ್ಥವಾಗುವ ಕನ್ನಡ",
     "Odia": "ସହଜ ଓ ବୁଝିପାରିବା ଓଡ଼ିଆ"
 }
 
-# TTS language codes
 lang_codes = {
     "Hindi": "hi", "Marathi": "mr", "Bengali": "bn", "Telugu": "te", "Tamil": "ta",
     "Urdu": "ur", "Gujarati": "gu", "Malayalam": "ml", "Kannada": "kn", "Odia": "or"
 }
 
-# Process request
+def generate_pdf(text):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    for line in text.split('\n'):
+        pdf.multi_cell(0, 10, line)
+    output = BytesIO()
+    pdf.output(output)
+    output.seek(0)
+    return output
+
 if text.strip():
     if st.button("🧠 Explain in " + language):
         with st.spinner(f"Generating explanation in {language}..."):
             lang_prompt = language_prompts.get(language, language)
             prompt = f"""
-तुम एक सहायक हो जो भारत के नागरिकों की सहायता करता है। कृपया नीचे दी गई सामग्री को {lang_prompt} में समझाओ ताकि सभी लोग उसे आसानी से समझ सकें।
-
-सामग्री:
-{text[:3000]}
+तुम एक सहायक हो जो भारत के नागरिकों की सहायता करता है। कृपया नीचे दी गई सामग्री को {lang_prompt} में समझाओ ताकि सभी लोग उसे आसानी से समझ सकें।\n\nसामग्री:\n{text[:3000]}
 """
             output = query_groq(prompt, language)
             if output:
                 st.subheader(f"🔍 {language} में व्याख्या:")
                 st.write(output)
+
+                # --- Download as PDF ---
+                pdf_file = generate_pdf(output)
+                st.download_button(
+                    label="⬇️ Download as PDF",
+                    data=pdf_file,
+                    file_name="bhashaai_output.pdf",
+                    mime="application/pdf"
+                )
 
                 # --- TTS Voice Support ---
                 try:
