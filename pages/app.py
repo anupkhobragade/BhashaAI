@@ -104,7 +104,6 @@ class UnicodePDF(FPDF):
 
 def generate_pdf(text):
     pdf = UnicodePDF()
-    pdf.add_page()
 
     font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
     if not os.path.exists(font_path):
@@ -112,6 +111,8 @@ def generate_pdf(text):
 
     pdf.add_font("Noto", "", font_path, uni=True)
     pdf.set_font("Noto", size=12)
+
+    pdf.add_page()
 
     for line in text.split('\n'):
         pdf.multi_cell(0, 10, line)
