@@ -1,63 +1,42 @@
 import os
+import sys
 os.environ["STREAMLIT_WATCH_FILE_SYSTEM"] = "false"
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import csv
+from datetime import datetime
+from io import BytesIO
+from fpdf import FPDF
 import streamlit as st
 import requests
 import pdfplumber
-import sys
-from io import BytesIO
 from gtts import gTTS
-from fpdf import FPDF
-from datetime import datetime
-import csv
 
 # Fix path issues when deploying
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from utils.groq_api import query_groq
+from utils.visitor_tracker import log_visit, get_today_count
 
-# === Visit Logging ===
-LOG_FILE = "visitor_log.csv"
-
-def log_visit():
-    today = datetime.now().strftime("%Y-%m-%d")
-    exists = os.path.exists(LOG_FILE)
-    with open(LOG_FILE, "a", newline="") as file:
-        writer = csv.writer(file)
-        if not exists:
-            writer.writerow(["date", "count"])
-        writer.writerow([today, 1])
-
-def get_today_count():
-    today = datetime.now().strftime("%Y-%m-%d")
-    if not os.path.exists(LOG_FILE):
-        return 0
-    with open(LOG_FILE, "r") as file:
-        reader = csv.reader(file)
-        next(reader, None)
-        count = sum(1 for row in reader if row[0] == today)
-        return count
-
-log_visit()
-
-# === PDF Generator ===
-def generate_pdf(text):
-    pdf = FPDF()
-    pdf.add_page()
-    font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
-    pdf.add_font("Noto", "", font_path, uni=True)
-    pdf.set_font("Noto", size=12)
-    for line in text.split('\n'):
-        pdf.multi_cell(0, 10, line)
-    output = BytesIO()
-    pdf.output(output)
-    output.seek(0)
-    return output
-
-# === Streamlit UI ===
+# Set Streamlit config
 st.set_page_config(page_title="BhashaAI", layout="wide")
 st.sidebar.image("bhasha_logo.png", width=150)
-st.sidebar.markdown(f"👁️ Today's Visitors: {get_today_count()}")
 
+# Log visitor
+log_visit()
+
+# Inject PWA metadata
+st.markdown("""
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png">
+<meta name="theme-color" content="#0b5cd1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BhashaAI">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="/icon-192.png">
+""", unsafe_allow_html=True)
+
+# Header
 st.markdown("""
 <div style='text-align: center;'>
     <h2 style='color: #FF671F;'>Bhasha AI</h2>
@@ -67,25 +46,34 @@ st.markdown("""
 
 st.markdown("Simplify forms, legal docs, and English content in **your preferred Indian language**.")
 
+st.sidebar.markdown(f"👁️ **Today's Visitors:** {get_today_count()}")
+
+# Language Options
 language = st.selectbox("🗣️ Output Language", [
-    "Hindi", "Marathi", "Bengali", "Telugu", "Tamil", 
+    "Hindi", "Marathi", "Bengali", "Telugu", "Tamil",
     "Urdu", "Gujarati", "Malayalam", "Kannada", "Odia"
 ])
 
 input_method = st.radio("📥 Choose Input Method", ["Upload PDF", "Paste Text"])
 text = ""
 
+# Handle Input
 if input_method == "Upload PDF":
     pdf_file = st.file_uploader("Upload a PDF file", type=["pdf"])
     if pdf_file:
-        with pdfplumber.open(pdf_file) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text
+        try:
+            with pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text
+        except Exception as e:
+            st.error("⚠️ Error reading PDF.")
+            st.exception(e)
 else:
     text = st.text_area("Paste your content here", height=200)
 
+# Language prompt map
 language_prompts = {
     "Hindi": "सरल और आसान हिंदी",
     "Marathi": "सोप्या आणि समजण्यासारख्या मराठीत",
@@ -104,8 +92,38 @@ lang_codes = {
     "Urdu": "ur", "Gujarati": "gu", "Malayalam": "ml", "Kannada": "kn", "Odia": "or"
 }
 
+# PDF Generator
+class UnicodePDF(FPDF):
+    def header(self):
+        self.set_font("Noto", size=12)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Noto", size=8)
+        self.cell(0, 10, f"Page {self.page_no()}", align="C")
+
+def generate_pdf(text):
+    pdf = UnicodePDF()
+    pdf.add_page()
+
+    font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
+    if not os.path.exists(font_path):
+        raise FileNotFoundError("Font file missing. Please ensure 'NotoSansDevanagari-Regular.ttf' is in the assets/ folder.")
+
+    pdf.add_font("Noto", "", font_path, uni=True)
+    pdf.set_font("Noto", size=12)
+
+    for line in text.split('\n'):
+        pdf.multi_cell(0, 10, line)
+
+    output = BytesIO()
+    pdf.output(output)
+    output.seek(0)
+    return output
+
+# Process translation
 if text.strip():
-    if st.button("🧠 Explain in " + language):
+    if st.button(f"🧠 Explain in {language}"):
         with st.spinner(f"Generating explanation in {language}..."):
             lang_prompt = language_prompts.get(language, language)
             prompt = f"""
@@ -119,14 +137,20 @@ if text.strip():
                 st.subheader(f"🔍 {language} में व्याख्या:")
                 st.write(output)
 
-                pdf_file = generate_pdf(output)
-                st.download_button(
-                    label="⬇️ Download as PDF",
-                    data=pdf_file,
-                    file_name="bhashaai_output.pdf",
-                    mime="application/pdf"
-                )
+                # Download PDF
+                try:
+                    pdf_file = generate_pdf(output)
+                    st.download_button(
+                        label="⬇️ Download as PDF",
+                        data=pdf_file,
+                        file_name="bhashaai_output.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error("PDF generation failed")
+                    st.exception(e)
 
+                # TTS
                 try:
                     lang_code = lang_codes.get(language, "hi")
                     tts = gTTS(output, lang=lang_code)
