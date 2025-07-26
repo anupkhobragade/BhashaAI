@@ -1,5 +1,6 @@
 import os
 import sys
+import textwrap
 os.environ["STREAMLIT_WATCH_FILE_SYSTEM"] = "false"
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import csv
@@ -14,6 +15,36 @@ from textwrap import wrap
 
 from utils.groq_api import query_groq
 from utils.visitor_tracker import log_visit, get_today_count
+
+# Text preprocessing function
+def preprocess_text(text):
+    """Clean and preprocess text for better rendering"""
+    # Remove problematic characters
+    text = text.replace('\u200d', '').replace('\u200c', '')  # Zero-width characters
+    text = text.replace('\ufeff', '')  # BOM character
+    text = text.replace('â€™', "'").replace('â€œ', '"').replace('â€', '"')  # Encoding fixes
+    
+    # Normalize whitespace
+    text = ' '.join(text.split())
+    
+    return text
+
+# Font configuration for different languages
+def get_font_for_language(language):
+    """Return appropriate font settings for different languages"""
+    font_configs = {
+        "Hindi": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Marathi": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Bengali": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Telugu": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Tamil": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Urdu": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Gujarati": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Malayalam": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Kannada": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"},
+        "Odia": {"font": "NotoSansDevanagari-Regular.ttf", "encoding": "utf-8"}
+    }
+    return font_configs.get(language, font_configs["Hindi"])
 
 # Streamlit Page Config
 st.set_page_config(page_title="BhashaAI", layout="wide")
@@ -89,57 +120,120 @@ lang_codes = {
     "Urdu": "ur", "Gujarati": "gu", "Malayalam": "ml", "Kannada": "kn", "Odia": "or"
 }
 
-# PDF Support with Unicode Font
-class UnicodePDF(FPDF):
-    def __init__(self):
-        super().__init__()
+# Modern FPDF-based PDF Generator (Fixed character scattering)
+def generate_pdf(text, language="Hindi"):
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        
+        # Add Unicode font
         font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
         if not os.path.exists(font_path):
-            raise FileNotFoundError("Font file missing. Please ensure 'NotoSansDevanagari-Regular.ttf' is in the assets/ folder.")
-        self.add_font("Noto", "", font_path, uni=True)
-        self.set_font("Noto", size=12)
+            st.error("Font file missing: NotoSansDevanagari-Regular.ttf in assets folder")
+            return None
+            
+        # Use modern FPDF syntax (no 'uni' parameter)
+        pdf.add_font("Noto", "", font_path)
+        
+        # Set margins
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_left_margin(15)
+        pdf.set_right_margin(15)
+        pdf.set_top_margin(20)
+        
+        # Title
+        pdf.set_font("Noto", size=16)
+        pdf.cell(0, 15, f"BhashaAI - {language} Output", align="C")
+        pdf.ln(20)
+        
+        # Content font
+        pdf.set_font("Noto", size=12)
+        
+        # Clean and normalize text to prevent character issues
+        clean_text = text.replace('\u200d', '').replace('\u200c', '').replace('\ufeff', '')
+        clean_text = clean_text.replace('â€™', "'").replace('â€œ', '"').replace('â€', '"')
+        clean_text = ' '.join(clean_text.split())  # Normalize all whitespace
+        
+        # Split text into sentences first, then into manageable chunks
+        sentences = clean_text.replace('।', '।|').replace('.', '.|').split('|')
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+                
+            # If sentence is too long, split by words
+            if len(sentence) > 80:
+                words = sentence.split()
+                current_chunk = ""
+                
+                for word in words:
+                    test_chunk = current_chunk + " " + word if current_chunk else word
+                    if len(test_chunk) <= 70:  # Characters per line
+                        current_chunk = test_chunk
+                    else:
+                        if current_chunk:
+                            pdf.multi_cell(0, 8, current_chunk, align="L")
+                            pdf.ln(2)
+                        current_chunk = word
+                
+                if current_chunk:
+                    pdf.multi_cell(0, 8, current_chunk, align="L")
+                    pdf.ln(2)
+            else:
+                # Short sentence, write directly
+                pdf.multi_cell(0, 8, sentence, align="L")
+                pdf.ln(2)
+        
+        # Generate PDF using modern syntax
+        output = BytesIO()
+        pdf_bytes = pdf.output()  # Modern FPDF returns bytes directly
+        output.write(pdf_bytes)
+        output.seek(0)
+        return output
+        
+    except Exception as e:
+        st.error(f"PDF generation error: {str(e)}")
+        # Try fallback method
+        return generate_simple_text_pdf(text, language)
 
-    def header(self):
-        self.set_font("Noto", size=12)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Noto", size=8)
-        self.cell(0, 10, f"Page {self.page_no()}", align="C")
-
-# Corrected PDF Generator
-def generate_pdf(text):
-    pdf = UnicodePDF()
-    pdf.add_page()
-
-    # Load Devanagari-capable font
-    font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
-    if not os.path.exists(font_path):
-        raise FileNotFoundError("Font file missing: assets/NotoSansDevanagari-Regular.ttf")
-
-    pdf.add_font("Noto", "", font_path, uni=True)
-    pdf.set_font("Noto", size=14)
-
-    # Set margins and cell width
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_left_margin(15)
-    pdf.set_right_margin(15)
-
-    # Write full paragraphs (not character-by-character)
-    lines = text.split("\n")
-    for line in lines:
-        if line.strip():
-            pdf.multi_cell(0, 10, line.strip())
-            pdf.ln(1)
+# Simple fallback PDF generator
+def generate_simple_text_pdf(text, language="Hindi"):
+    """Fallback method using basic text handling"""
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        
+        font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
+        if os.path.exists(font_path):
+            pdf.add_font("Noto", "", font_path)
+            pdf.set_font("Noto", size=12)
         else:
-            pdf.ln(5)
-
-    # Return as byte stream
-    output = BytesIO()
-    pdf_bytes = pdf.output(dest="S").encode("latin1")
-    output.write(pdf_bytes)
-    output.seek(0)
-    return output
+            # Use built-in font as last resort
+            pdf.set_font("Arial", size=12)
+        
+        pdf.cell(0, 15, f"BhashaAI - {language} Output", align="C")
+        pdf.ln(20)
+        
+        # Very simple text handling - just write plain text
+        clean_text = ' '.join(text.split())
+        
+        # Break into small chunks
+        chunk_size = 60
+        for i in range(0, len(clean_text), chunk_size):
+            chunk = clean_text[i:i+chunk_size]
+            pdf.multi_cell(0, 10, chunk)
+            pdf.ln(3)
+        
+        output = BytesIO()
+        pdf_bytes = pdf.output()
+        output.write(pdf_bytes)
+        output.seek(0)
+        return output
+        
+    except Exception as e:
+        st.error(f"Fallback PDF generation error: {str(e)}")
+        return None
 
 # Main Logic
 if text.strip():
@@ -154,12 +248,15 @@ if text.strip():
 """
             output = query_groq(prompt, language)
             if output:
+                # Preprocess the output text
+                output = preprocess_text(output)
+                
                 st.subheader(f"🔍 {language} में व्याख्या:")
                 st.write(output)
 
                 # Download PDF
                 try:
-                    pdf_file = generate_pdf(output)
+                    pdf_file = generate_pdf(output, language)
                     st.download_button(
                         label="⬇️ Download as PDF",
                         data=pdf_file,
