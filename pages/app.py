@@ -3,6 +3,7 @@ import sys
 os.environ["STREAMLIT_WATCH_FILE_SYSTEM"] = "false"
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import csv
 from datetime import datetime
 from io import BytesIO
@@ -11,18 +12,19 @@ import streamlit as st
 import requests
 import pdfplumber
 from gtts import gTTS
+from textwrap import wrap
 
 from utils.groq_api import query_groq
 from utils.visitor_tracker import log_visit, get_today_count
 
-# Set Streamlit config
+# Streamlit Page Config
 st.set_page_config(page_title="BhashaAI", layout="wide")
 st.sidebar.image("bhasha_logo.png", width=150)
 
-# Log visitor
+# Track visits
 log_visit()
 
-# Inject PWA metadata
+# Inject PWA meta tags
 st.markdown("""
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon-192.png">
@@ -34,7 +36,7 @@ st.markdown("""
 <link rel="apple-touch-icon" href="/icon-192.png">
 """, unsafe_allow_html=True)
 
-# Header
+# App Header
 st.markdown("""
 <div style='text-align: center;'>
     <h2 style='color: #FF671F;'>Bhasha AI</h2>
@@ -43,10 +45,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("Simplify forms, legal docs, and English content in **your preferred Indian language**.")
-
 st.sidebar.markdown(f"👁️ **Today's Visitors:** {get_today_count()}")
 
-# Language Options
+# Language options
 language = st.selectbox("🗣️ Output Language", [
     "Hindi", "Marathi", "Bengali", "Telugu", "Tamil",
     "Urdu", "Gujarati", "Malayalam", "Kannada", "Odia"
@@ -55,7 +56,7 @@ language = st.selectbox("🗣️ Output Language", [
 input_method = st.radio("📥 Choose Input Method", ["Upload PDF", "Paste Text"])
 text = ""
 
-# Handle Input
+# Handle input
 if input_method == "Upload PDF":
     pdf_file = st.file_uploader("Upload a PDF file", type=["pdf"])
     if pdf_file:
@@ -71,7 +72,7 @@ if input_method == "Upload PDF":
 else:
     text = st.text_area("Paste your content here", height=200)
 
-# Language prompt map
+# Language instructions
 language_prompts = {
     "Hindi": "सरल और आसान हिंदी",
     "Marathi": "सोप्या आणि समजण्यासारख्या मराठीत",
@@ -90,7 +91,7 @@ lang_codes = {
     "Urdu": "ur", "Gujarati": "gu", "Malayalam": "ml", "Kannada": "kn", "Odia": "or"
 }
 
-# PDF Generator
+# PDF Support with Unicode Font
 class UnicodePDF(FPDF):
     def __init__(self):
         super().__init__()
@@ -108,6 +109,7 @@ class UnicodePDF(FPDF):
         self.set_font("Noto", size=8)
         self.cell(0, 10, f"Page {self.page_no()}", align="C")
 
+# Corrected PDF Generator
 def generate_pdf(text):
     pdf = UnicodePDF()
 
@@ -119,16 +121,20 @@ def generate_pdf(text):
     pdf.set_font("Noto", size=12)
     pdf.add_page()
 
-    for line in text.split('\n'):
-        pdf.multi_cell(0, 10, line)
+    max_width = 100  # characters per line for wrapping
+    for paragraph in text.split("\n\n"):
+        lines = wrap(paragraph.strip(), width=max_width)
+        for line in lines:
+            pdf.multi_cell(0, 10, line, align='L')
+        pdf.ln(5)
 
     output = BytesIO()
-    pdf_bytes = pdf.output(dest='S').encode('latin1')  # Convert to bytes
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
     output.write(pdf_bytes)
     output.seek(0)
     return output
 
-# Process translation
+# Main Logic
 if text.strip():
     if st.button(f"🧠 Explain in {language}"):
         with st.spinner(f"Generating explanation in {language}..."):
@@ -157,7 +163,7 @@ if text.strip():
                     st.error("PDF generation failed")
                     st.exception(e)
 
-                # TTS
+                # Voice Support
                 try:
                     lang_code = lang_codes.get(language, "hi")
                     tts = gTTS(output, lang=lang_code)
