@@ -573,3 +573,13 @@ if text.strip():
                     st.exception(e)
 else:
     st.info("कृपया PDF अपलोड करें या टेक्स्ट पेस्ट करें।")
+
+    # Footer
+st.markdown("""---""")
+st.markdown(
+    "<div style='text-align: center; font-size: 14px; color: grey;'>"
+    "📬 Contact: <a href='mailto:anupkhobragade@gmail.com'>anupkhobragade@gmail.com</a>  |  Built in Pune 🇮🇳<br>"
+    # "Made with ❤️ using Streamlit & OpenAI"
+    "</div>",
+    unsafe_allow_html=True
+)

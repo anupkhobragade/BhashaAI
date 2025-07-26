@@ -39,7 +39,8 @@ st.markdown("""
 #### 🔈 New Features:
 - 📄 PDF + Text input supported  
 - 🌐 Translates to **10 different Indian languages**  
-- 🔊 Includes **Text-to-Speech** output  
+- 🔊 Includes **Text-to-Speech** output
+- 🖨️ Save translated Hindi/Marathi output as **PDF**  
 - ✅ 100 percent Free and No Login Needed  
 """)
 
@@ -65,5 +66,11 @@ st.markdown("""
 -  🌐 [Try on Streamlit](https://bhashaai.streamlit.app/app)    
 """)
 # Footer
-st.markdown("---")
-st.markdown("📬 Contact: [anupkhobragade@gmail.com](mailto:anupkhobragade@gmail.com)  |  Built in Pune 🇮🇳")
+st.markdown("""---""")
+st.markdown(
+    "<div style='text-align: center; font-size: 14px; color: grey;'>"
+    "📬 Contact: <a href='mailto:anupkhobragade@gmail.com'>anupkhobragade@gmail.com</a>  |  Built in Pune 🇮🇳<br>"
+    "Made with ❤️ using Streamlit & OpenAI"
+    "</div>",
+    unsafe_allow_html=True
+)
