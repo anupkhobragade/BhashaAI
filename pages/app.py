@@ -574,7 +574,6 @@ if text.strip():
 else:
     st.info("कृपया PDF अपलोड करें या टेक्स्ट पेस्ट करें।")
 
-# Fixed Footer
 footer_html = """
 <style>
 .footer {
@@ -583,18 +582,30 @@ footer_html = """
     left: 0;
     right: 0;
     background-color: white;
-    padding: 10px;
+    padding: 10px 15px;
     text-align: center;
-    font-size: 14px;
-    color: #444;
+    font-size: 13px;
+    color: #333;
     border-top: 1px solid #ccc;
-    z-index: 100;
+    z-index: 1000;
+}
+
+.footer a {
+    color: #0b5cd1;
+    text-decoration: none;
+    margin: 0 8px;
+}
+
+.footer a:hover {
+    text-decoration: underline;
 }
 </style>
+
 <div class="footer">
-    📬 Contact: <a href='mailto:anupkhobragade@gmail.com'>anupkhobragade@gmail.com</a> | Built in Pune 🇮🇳<br>
-    © 2025 BhashaAI. All rights reserved. 
+    📬 Contact: <a href='mailto:anupkhobragade@gmail.com'>anupkhobragade@gmail.com</a> |
+    <a href="https://twitter.com/anupkhobragade" target="_blank">Twitter</a> |
+    <a href="https://www.linkedin.com/in/anup-khobragade" target="_blank">LinkedIn</a><br>
+    Proudly developed in Pune, India 🇮🇳  |  © 2025 BhashaAI. All rights reserved.
 </div>
 """
-
 st.markdown(footer_html, unsafe_allow_html=True)
