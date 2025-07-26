@@ -132,14 +132,67 @@ def generate_pdf(text, language="Hindi"):
     except Exception as e:
         st.warning(f"ReportLab method failed: {str(e)}")
     
-    # Strategy 2: Try FPDF with careful text encoding
+    # Strategy 2: Try FPDF with Unicode support
     try:
         return generate_pdf_fpdf_safe(text, language)
     except Exception as e:
         st.warning(f"FPDF method failed: {str(e)}")
     
-    # Strategy 3: Last resort - ASCII-only PDF
-    return create_error_pdf(language, str(e) if 'e' in locals() else "Unknown error")
+    # Strategy 3: ASCII-only PDF as last resort
+    try:
+        return generate_ascii_only_pdf(text, language)
+    except Exception as e:
+        st.warning(f"ASCII fallback failed: {str(e)}")
+    
+    # Strategy 4: Error PDF (never fails)
+    return create_error_pdf(language, "All PDF generation methods failed")
+
+# ASCII-only fallback PDF generator
+def generate_ascii_only_pdf(text, language="Hindi"):
+    """Generate PDF with ASCII-only content as ultimate fallback"""
+    
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=14)
+    
+    # ASCII-safe title
+    pdf.cell(0, 15, "BhashaAI - Output", align="C")
+    pdf.ln(20)
+    
+    pdf.set_font("Arial", size=12)
+    
+    # Convert text to ASCII-safe version
+    ascii_text = ""
+    for char in text:
+        if ord(char) < 128:
+            ascii_text += char
+        elif char in 'नमस्तेकमैंहूसरकारभारतीयहिंदीमराठीबंगालीतमिलतेलुगुगुजरातीमलयालमकन्नडओडिया':
+            ascii_text += "?"  # Replace Indian chars with ?
+        else:
+            ascii_text += " "
+    
+    # Clean up the text
+    ascii_text = ' '.join(ascii_text.split())
+    
+    if not ascii_text or len(ascii_text.strip()) < 5:
+        ascii_text = "Original content contained non-ASCII characters that cannot be displayed in this PDF format. Please try a different approach or contact support."
+    
+    # Write in small chunks
+    chunk_size = 80
+    for i in range(0, len(ascii_text), chunk_size):
+        chunk = ascii_text[i:i+chunk_size]
+        try:
+            pdf.multi_cell(0, 8, chunk)
+            pdf.ln(3)
+        except:
+            pass  # Skip problematic chunks
+    
+    # Generate PDF
+    output = BytesIO()
+    pdf_bytes = pdf.output()
+    output.write(pdf_bytes)
+    output.seek(0)
+    return output
 
 # Safe FPDF generator with robust encoding handling
 def generate_pdf_fpdf_safe(text, language="Hindi"):
@@ -148,53 +201,59 @@ def generate_pdf_fpdf_safe(text, language="Hindi"):
     pdf = FPDF()
     pdf.add_page()
     
-    # Check font availability
-    font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
-    font_available = os.path.exists(font_path)
-    
-    if font_available:
-        try:
+    # Always use Arial as fallback to avoid font issues
+    try:
+        font_path = os.path.join("assets", "NotoSansDevanagari-Regular.ttf")
+        if os.path.exists(font_path):
             pdf.add_font("Noto", "", font_path)
             pdf.set_font("Noto", size=16)
             font_name = "Noto"
-        except Exception as e:
-            st.warning(f"Font loading failed: {e}")
-            pdf.set_font("Arial", size=16)  # Fallback to Arial
-            font_name = "Arial"
-    else:
+        else:
+            raise Exception("Font not found")
+    except Exception as e:
+        # Use Arial as fallback
         pdf.set_font("Arial", size=16)
         font_name = "Arial"
     
-    # Title
+    # Title - Convert to ASCII for safety
     try:
-        pdf.cell(0, 15, f"BhashaAI - {language} Output", align="C")
+        title = f"BhashaAI - {language} Output"
+        # Try with Unicode font first
+        if font_name == "Noto":
+            pdf.cell(0, 15, title, align="C")
+        else:
+            # ASCII fallback
+            pdf.cell(0, 15, "BhashaAI - Output", align="C")
     except:
-        pdf.cell(0, 15, f"BhashaAI - Output", align="C")  # Fallback title
+        pdf.cell(0, 15, "BhashaAI - Output", align="C")
     
     pdf.ln(20)
     
     # Content font
-    pdf.set_font(font_name, size=12)
+    try:
+        pdf.set_font(font_name, size=12)
+    except:
+        pdf.set_font("Arial", size=12)
     
-    # Text preprocessing - multiple strategies
-    processed_text = preprocess_text_for_pdf(text)
+    # Aggressive text preprocessing for encoding safety
+    processed_text = preprocess_text_for_pdf_safe(text)
     
     # If no valid text after processing, create error message
     if not processed_text or len(processed_text.strip()) < 5:
-        processed_text = "Content could not be processed for PDF generation. Please try with different text."
+        processed_text = "Content could not be processed for PDF generation."
     
-    # Write text with error handling
+    # Write text with maximum safety
     try:
-        write_text_to_pdf(pdf, processed_text)
+        write_text_to_pdf_safe(pdf, processed_text, font_name)
     except Exception as e:
-        # If writing fails, try ASCII-only version
+        # Ultimate fallback - ASCII only
         ascii_text = ''.join(c for c in processed_text if ord(c) < 128)
-        if ascii_text:
-            write_text_to_pdf(pdf, ascii_text)
-        else:
-            pdf.multi_cell(0, 10, "Content contains characters that cannot be displayed in PDF format.")
+        if not ascii_text:
+            ascii_text = "Content contains characters that cannot be displayed in PDF format."
+        pdf.set_font("Arial", size=12)
+        pdf.multi_cell(0, 10, ascii_text)
     
-    # Generate PDF
+    # Generate PDF with encoding safety
     output = BytesIO()
     try:
         pdf_bytes = pdf.output()
@@ -204,23 +263,37 @@ def generate_pdf_fpdf_safe(text, language="Hindi"):
     except Exception as e:
         raise Exception(f"PDF output generation failed: {e}")
 
-def preprocess_text_for_pdf(text):
-    """Comprehensive text preprocessing for PDF compatibility"""
+def preprocess_text_for_pdf_safe(text):
+    """Ultra-safe text preprocessing for PDF compatibility"""
     if not text:
         return ""
     
-    # Remove problematic Unicode characters
-    text = text.replace('\u200d', '')  # Zero-width joiner
-    text = text.replace('\u200c', '')  # Zero-width non-joiner
-    text = text.replace('\ufeff', '')  # BOM
-    text = text.replace('\u202a', '')  # Left-to-right embedding
-    text = text.replace('\u202c', '')  # Pop directional formatting
+    # Remove ALL problematic Unicode characters
+    safe_chars = []
+    for char in text:
+        try:
+            # Test if character is safe
+            char_code = ord(char)
+            
+            # Keep basic Latin, extended Latin, and Devanagari ranges
+            if (
+                (0x0020 <= char_code <= 0x007E) or  # Basic Latin
+                (0x00A0 <= char_code <= 0x00FF) or  # Latin-1 Supplement
+                (0x0900 <= char_code <= 0x097F) or  # Devanagari
+                char in ' \n\r\t।'  # Safe whitespace and punctuation
+            ):
+                safe_chars.append(char)
+            else:
+                safe_chars.append(' ')  # Replace with space
+        except:
+            safe_chars.append(' ')
+    
+    text = ''.join(safe_chars)
     
     # Fix common encoding issues
     replacements = {
         'â€™': "'", 'â€œ': '"', 'â€': '"', 'â€˜': "'",
-        'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú',
-        'Ã ': 'à', 'Ã¨': 'è', 'Ã¬': 'ì', 'Ã²': 'ò', 'Ã¹': 'ù'
+        'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú'
     }
     
     for old, new in replacements.items():
@@ -229,65 +302,62 @@ def preprocess_text_for_pdf(text):
     # Normalize whitespace
     text = ' '.join(text.split())
     
-    # Remove any remaining problematic characters but keep Indian language characters
-    safe_text = ""
-    for char in text:
-        try:
-            # Test if character can be encoded
-            char.encode('utf-8')
-            safe_text += char
-        except:
-            safe_text += " "  # Replace problematic char with space
-    
-    return safe_text.strip()
+    return text.strip()
 
-def write_text_to_pdf(pdf, text):
-    """Write text to PDF with smart line breaking"""
+def write_text_to_pdf_safe(pdf, text, font_name):
+    """Write text to PDF with maximum safety"""
     if not text:
         return
     
-    # Split into sentences for better formatting
-    sentences = []
-    current_sentence = ""
+    # Split into small, manageable chunks
+    max_chunk_size = 50  # Very conservative
     
-    # Split by common sentence endings
-    for char in text:
-        current_sentence += char
-        if char in '।.!?':
-            sentences.append(current_sentence.strip())
-            current_sentence = ""
+    # Split by sentences first
+    sentences = text.replace('।', '।\n').replace('.', '.\n').split('\n')
     
-    # Add remaining text as last sentence
-    if current_sentence.strip():
-        sentences.append(current_sentence.strip())
-    
-    # Write each sentence with appropriate line breaks
     for sentence in sentences:
+        sentence = sentence.strip()
         if not sentence:
             continue
+        
+        # Break long sentences into smaller chunks
+        words = sentence.split()
+        current_chunk = ""
+        
+        for word in words:
+            test_chunk = current_chunk + " " + word if current_chunk else word
             
-        # If sentence is too long, break it into chunks
-        max_length = 70
-        if len(sentence) > max_length:
-            words = sentence.split()
-            current_line = ""
-            
-            for word in words:
-                test_line = current_line + " " + word if current_line else word
-                if len(test_line) <= max_length:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        pdf.multi_cell(0, 8, current_line.strip())
+            if len(test_chunk) <= max_chunk_size:
+                current_chunk = test_chunk
+            else:
+                # Write current chunk
+                if current_chunk:
+                    try:
+                        if font_name == "Noto":
+                            pdf.multi_cell(0, 8, current_chunk.strip())
+                        else:
+                            # For Arial, ensure ASCII only
+                            ascii_chunk = ''.join(c for c in current_chunk if ord(c) < 128)
+                            if ascii_chunk:
+                                pdf.multi_cell(0, 8, ascii_chunk.strip())
                         pdf.ln(2)
-                    current_line = word
-            
-            if current_line:
-                pdf.multi_cell(0, 8, current_line.strip())
+                    except Exception as e:
+                        # Skip problematic chunks
+                        pass
+                current_chunk = word
+        
+        # Write remaining chunk
+        if current_chunk:
+            try:
+                if font_name == "Noto":
+                    pdf.multi_cell(0, 8, current_chunk.strip())
+                else:
+                    ascii_chunk = ''.join(c for c in current_chunk if ord(c) < 128)
+                    if ascii_chunk:
+                        pdf.multi_cell(0, 8, ascii_chunk.strip())
                 pdf.ln(2)
-        else:
-            pdf.multi_cell(0, 8, sentence)
-            pdf.ln(2)
+            except:
+                pass
 
 # ReportLab PDF generator (better Unicode support)
 def generate_pdf_reportlab(text, language="Hindi"):
@@ -313,9 +383,11 @@ def generate_pdf_reportlab(text, language="Hindi"):
     margin = 50
     line_height = 18
     
-    # Title
+    # Title - Fix the method name
     p.setFont("Noto", 16)
-    p.drawCentredText(width/2, y_position, f"BhashaAI - {language} Output")
+    title_text = f"BhashaAI - {language} Output"
+    title_width = p.stringWidth(title_text, "Noto", 16)
+    p.drawString((width - title_width) / 2, y_position, title_text)  # Center manually
     y_position -= 40
     
     # Content
@@ -418,32 +490,38 @@ def create_error_pdf(language="Hindi", error_msg="Unknown error"):
     try:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", size=14)
         
-        pdf.cell(0, 15, f"BhashaAI - {language} Output", align="C")
+        # Use only ASCII-safe content for error PDF
+        pdf.set_font("Arial", size=14)
+        pdf.cell(0, 15, "BhashaAI - PDF Generation Error", align="C")
         pdf.ln(25)
         
         pdf.set_font("Arial", size=12)
-        pdf.multi_cell(0, 10, "Sorry, there was an issue generating the PDF with the requested content.")
+        pdf.multi_cell(0, 10, "Sorry, there was an issue generating the PDF.")
         pdf.ln(10)
-        pdf.multi_cell(0, 10, f"Error details: {error_msg}")
+        
+        # Only include ASCII-safe error message
+        safe_error = ''.join(c for c in str(error_msg) if ord(c) < 128)
+        if safe_error:
+            pdf.multi_cell(0, 10, f"Error: {safe_error[:100]}")
         pdf.ln(10)
+        
         pdf.multi_cell(0, 10, "Suggestions:")
         pdf.ln(5)
         pdf.multi_cell(0, 10, "• Try using shorter text")
         pdf.ln(5)
-        pdf.multi_cell(0, 10, "• Check if the content has special characters")
+        pdf.multi_cell(0, 10, "• Use simpler language")
         pdf.ln(5)
-        pdf.multi_cell(0, 10, "• Contact support if the issue persists")
+        pdf.multi_cell(0, 10, "• Contact support if issue persists")
         
         output = BytesIO()
         pdf_bytes = pdf.output()
         output.write(pdf_bytes)
         output.seek(0)
         return output
+        
     except Exception as e:
-        # Even the error PDF failed - return None and let the UI handle it
-        st.error(f"Critical PDF generation failure: {e}")
+        # Ultimate fallback - return None and let UI handle gracefully
         return None
 
 # Main Logic
