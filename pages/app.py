@@ -12,6 +12,21 @@ import requests
 import pdfplumber
 from gtts import gTTS
 from textwrap import wrap
+import easyocr
+import cv2
+import numpy as np
+from PIL import Image
+import tempfile
+try:
+    from pdf2image import convert_from_bytes
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
 
 from utils.groq_api import query_groq
 from utils.visitor_tracker import log_visit, get_today_count
@@ -46,12 +61,183 @@ def get_font_for_language(language):
     }
     return font_configs.get(language, font_configs["Hindi"])
 
+# Initialize OCR reader (cached to avoid reloading)
+@st.cache_resource
+def get_ocr_reader():
+    """Initialize and cache OCR reader"""
+    try:
+        # Support only English and Hindi for maximum compatibility
+        reader = easyocr.Reader(['en', 'hi'], gpu=False)
+        return reader
+    except Exception as e:
+        st.error(f"Failed to initialize OCR reader: {str(e)}")
+        return None
+
+def extract_text_from_image(image, reader):
+    """Extract text from image using OCR"""
+    try:
+        if reader is None:
+            return "OCR reader not available"
+        
+        # Convert PIL image to numpy array if needed
+        if isinstance(image, Image.Image):
+            image_array = np.array(image)
+        else:
+            image_array = image
+        
+        # Show processing message for images
+        processing_placeholder = st.empty()
+        # processing_placeholder.info("⏳ Extracting text from image...")
+        
+        # Perform OCR silently
+        results = reader.readtext(image_array, detail=0)
+        extracted_text = ' '.join(results)
+        
+        # Clear processing message
+        processing_placeholder.empty()
+        
+        return extracted_text.strip()
+    except Exception as e:
+        # Clear processing message on error
+        if 'processing_placeholder' in locals():
+            processing_placeholder.empty()
+        st.error(f"Error extracting text from image: {str(e)}")
+        return ""
+
+def extract_text_from_image_pdf(pdf_bytes, reader):
+    """Extract text from image-based PDF using OCR"""
+    try:
+        if reader is None:
+            return "OCR reader not available"
+        
+        extracted_text = ""
+        
+        # Show processing message
+        processing_placeholder = st.empty()
+        processing_placeholder.info("⏳ Please wait, PDF is processing...")
+        
+        # Try pdf2image first, then PyMuPDF as fallback
+        images = []
+        
+        if PDF2IMAGE_AVAILABLE:
+            try:
+                images = convert_from_bytes(pdf_bytes, dpi=200)
+            except Exception as e:
+                images = []
+        
+        # Fallback to PyMuPDF
+        if not images and PYMUPDF_AVAILABLE:
+            try:
+                images = convert_pdf_pymupdf(pdf_bytes)
+            except Exception as e:
+                processing_placeholder.empty()
+                return ""
+        
+        # If no conversion method worked
+        if not images:
+            processing_placeholder.empty()
+            st.error("Unable to process PDF. Please try a different file.")
+            return ""
+        
+        # Update progress message
+        if len(images) > 1:
+            processing_placeholder.info(f"⏳ Processing {len(images)} pages, please wait...")
+        
+        # Process each page silently
+        for i, image in enumerate(images):
+            # Update progress for multi-page documents
+            if len(images) > 3:  # Only show page progress for longer documents
+                processing_placeholder.info(f"⏳ Processing page {i+1} of {len(images)}...")
+            
+            # Convert PIL image to numpy array if needed
+            if isinstance(image, Image.Image):
+                image_array = np.array(image)
+            else:
+                image_array = image
+            
+            # Extract text from this page
+            page_text = extract_text_from_image(image_array, reader)
+            if page_text:
+                extracted_text += f"\n--- Page {i+1} ---\n{page_text}\n"
+        
+        # Clear processing message
+        processing_placeholder.empty()
+        
+        return extracted_text.strip()
+    except Exception as e:
+        # Clear processing message on error
+        if 'processing_placeholder' in locals():
+            processing_placeholder.empty()
+        st.error(f"Error processing PDF: {str(e)}")
+        return ""
+
+def convert_pdf_pymupdf(pdf_bytes):
+    """Convert PDF to images using PyMuPDF (fitz)"""
+    try:
+        # Open PDF from bytes
+        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+        images = []
+        
+        for page_num in range(len(pdf_document)):
+            # Get page
+            page = pdf_document[page_num]
+            
+            # Convert page to image
+            # Higher matrix values = higher resolution
+            mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better quality
+            pix = page.get_pixmap(matrix=mat)
+            
+            # Convert to PIL Image
+            img_data = pix.tobytes("ppm")
+            img = Image.open(BytesIO(img_data))
+            images.append(img)
+        
+        pdf_document.close()
+        return images
+        
+    except Exception as e:
+        raise Exception(f"PyMuPDF conversion failed: {str(e)}")
+
+def is_pdf_image_based(pdf_bytes):
+    """Check if PDF is image-based (scanned) or text-based"""
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            text_content = ""
+            # Check first few pages for text content
+            pages_to_check = min(3, len(pdf.pages))
+            
+            for i in range(pages_to_check):
+                page_text = pdf.pages[i].extract_text()
+                if page_text:
+                    text_content += page_text.strip()
+            
+            # If very little text found, likely image-based
+            return len(text_content.strip()) < 50
+    except:
+        return True  # Assume image-based if can't read normally
+
 # Streamlit Page Config
 st.set_page_config(page_title="BhashaAI", layout="wide")
-st.sidebar.image("bhasha_logo.png", width=150)
 
 # Track visits
 log_visit()
+
+# Sidebar Layout
+st.sidebar.markdown("""
+<div style="text-align:  center;">
+    <img src="data:image/gif;base64,{}" width="180">
+</div>
+""".format(
+    __import__('base64').b64encode(open("bhasha_logo.gif", "rb").read()).decode()
+), unsafe_allow_html=True)
+
+st.sidebar.markdown("### 🎯 Supported Formats")
+st.sidebar.markdown("**PDFs:** Text & Image-based")
+st.sidebar.markdown("**Images:** JPG, PNG, BMP")  
+st.sidebar.markdown("**Languages:** English + Indian languages")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"**Today's Visitors:** {get_today_count()}")
 
 # Inject PWA meta tags
 st.markdown("""
@@ -67,14 +253,17 @@ st.markdown("""
 
 # App Header
 st.markdown("""
-<div style='text-align: center;'>
-    <h2 style='color: #FF671F;'>Bhasha AI</h2>
-    <p style='color: #046A38; font-weight: bold; font-size: 20px;'>भारत का अपना ChatGPT</p>
+<div style='text-align: center; margin-top: -50px; margin-bottom: -20px;'>
+    <h2 style='color: #FF671F; margin: 0; padding: 0;'>Bhasha AI</h2>
+    <p style='color: #046A38; font-weight: bold; font-size: 20px; margin: 5px 0;'>भारत का अपना ChatGPT</p>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("Simplify forms, legal docs, and English content in **your preferred Indian language**.")
-st.sidebar.markdown(f"👁️ **Today's Visitors:** {get_today_count()}")
+st.markdown("""
+<div style='text-align: center; margin-bottom: 20px;'>
+    <p style='margin: 5px 0; font-size: 16px;'>Simplify forms, legal docs, and English content in <strong>your preferred Indian language</strong>.</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Language options
 language = st.selectbox("🗣️ Output Language", [
@@ -82,22 +271,71 @@ language = st.selectbox("🗣️ Output Language", [
     "Urdu", "Gujarati", "Malayalam", "Kannada", "Odia"
 ])
 
-input_method = st.radio("📥 Choose Input Method", ["Upload PDF", "Paste Text"])
+input_method = st.radio("📥 Choose Input Method", ["Upload PDF or Image", "Paste Text"])
 text = ""
 
+# Initialize OCR reader
+ocr_reader = None
+if input_method == "Upload PDF or Image":
+    ocr_reader = get_ocr_reader()
+
 # Handle input
-if input_method == "Upload PDF":
-    pdf_file = st.file_uploader("Upload a PDF file", type=["pdf"])
-    if pdf_file:
-        try:
-            with pdfplumber.open(pdf_file) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text
-        except Exception as e:
-            st.error("⚠️ Error reading PDF.")
-            st.exception(e)
+if input_method == "Upload PDF or Image":
+    uploaded_file = st.file_uploader("Upload a PDF or Image file", type=["pdf", "jpg", "jpeg", "png", "bmp", "tiff"])
+    if uploaded_file:
+        file_type = uploaded_file.type
+        
+        if file_type == "application/pdf":
+            # Handle PDF file
+            pdf_bytes = uploaded_file.read()
+            
+            # Check if PDF is image-based or text-based
+            if is_pdf_image_based(pdf_bytes):
+                text = extract_text_from_image_pdf(pdf_bytes, ocr_reader)
+            else:
+                try:
+                    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+                        for page in pdf.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                text += page_text
+                except Exception as e:
+                    text = extract_text_from_image_pdf(pdf_bytes, ocr_reader)
+        
+        else:
+            # Handle image file
+            try:
+                # Display a small thumbnail of the uploaded image
+                image = Image.open(uploaded_file)
+                
+                # Create a small thumbnail
+                thumbnail = image.copy()
+                thumbnail.thumbnail((150, 150))  # Max 150x150 pixels
+                
+                # Show thumbnail with filename
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    st.image(thumbnail, caption=f"📎 {uploaded_file.name}", width=150)
+                with col2:
+                    st.write(f"**File:** {uploaded_file.name}")
+                    st.write(f"**Type:** {uploaded_file.type}")
+                
+                # Show processing message
+                st.info("⏳ Image is processing, please wait...")
+                
+                # Extract text from image using OCR
+                text = extract_text_from_image(image, ocr_reader)
+                
+                if text:
+                    st.success(f"✅ Extracted {len(text)} characters from image")
+                    with st.expander("📝 Extracted Text Preview"):
+                        st.text_area("Extracted text:", text, height=150, disabled=True)
+                else:
+                    st.warning("⚠️ No text found in the image")
+                    
+            except Exception as e:
+                st.error("⚠️ Error processing image.")
+                st.exception(e)
 else:
     text = st.text_area("Paste your content here", height=200)
 
@@ -117,7 +355,7 @@ language_prompts = {
 
 lang_codes = {
     "Hindi": "hi", "Marathi": "mr", "Bengali": "bn", "Telugu": "te", "Tamil": "ta",
-    "Urdu": "ur", "Gujarati": "gu", "Malayalam": "ml", "Kannada": "kn", "Odia": "or"
+    "Urdu": "ur", "Gujarati": "gu", "Malayalam": "ml", "Kannada": "kn", "Odia": "hi"  # Odia not supported by gTTS, fallback to Hindi
 }
 
 # Robust PDF Generator with comprehensive error handling
@@ -524,55 +762,84 @@ def create_error_pdf(language="Hindi", error_msg="Unknown error"):
         # Ultimate fallback - return None and let UI handle gracefully
         return None
 
-# Main Logic
-if text.strip():
-    if st.button(f"🧠 Explain in {language}"):
-        with st.spinner(f"Generating explanation in {language}..."):
-            lang_prompt = language_prompts.get(language, language)
-            prompt = f"""
+# Process and generate output automatically when text is available
+def process_and_generate_output(text, language):
+    """Process text and generate output automatically"""
+    with st.spinner(f"Generating explanation in {language}..."):
+        lang_prompt = language_prompts.get(language, language)
+        prompt = f"""
 तुम एक सहायक हो जो भारत के नागरिकों की सहायता करता है। कृपया नीचे दी गई सामग्री को {lang_prompt} में समझाओ ताकि सभी लोग उसे आसानी से समझ सकें।
 
 सामग्री:
 {text[:3000]}
 """
-            output = query_groq(prompt, language)
-            if output:
-                # Preprocess the output text
-                output = preprocess_text(output)
-                
-                st.subheader(f"🔍 {language} में व्याख्या:")
-                st.write(output)
+        output = query_groq(prompt, language)
+        if output:
+            # Preprocess the output text
+            output = preprocess_text(output)
+            
+            st.subheader(f"🔍 {language} में व्याख्या:")
+            st.write(output)
 
-                # PDF Download - Only for Hindi and Marathi (Devanagari script supported)
-                if language in ["Hindi", "Marathi"]:
-                    pdf_file = generate_pdf(output, language)
-                    if pdf_file is not None:
-                        st.download_button(
-                            label="⬇️ Download as PDF",
-                            data=pdf_file,
-                            file_name="bhashaai_output.pdf",
-                            mime="application/pdf"
-                        )
-                    else:
-                        st.error("⚠️ Could not generate PDF. Please try again.")
+            # PDF Download - Only for Hindi and Marathi (Devanagari script supported)
+            if language in ["Hindi", "Marathi"]:
+                pdf_file = generate_pdf(output, language)
+                if pdf_file is not None:
+                    st.download_button(
+                        label="⬇️ Download as PDF",
+                        data=pdf_file,
+                        file_name="bhashaai_output.pdf",
+                        mime="application/pdf"
+                    )
                 else:
-                    # Show info for non-Devanagari languages
-                    st.info(f"💡 PDF download is currently available only for Hindi and Marathi. {language} content is displayed above with voice support.")
+                    st.error("⚠️ Could not generate PDF. Please try again.")
+            else:
+                # Show info for non-Devanagari languages
+                st.info(f"💡 PDF download is currently available only for Hindi and Marathi. {language} content is displayed above with voice support.")
 
-                # Voice Support (available for all languages)
-                try:
-                    lang_code = lang_codes.get(language, "hi")
-                    tts = gTTS(output, lang=lang_code)
-                    audio_bytes = BytesIO()
-                    tts.write_to_fp(audio_bytes)
-                    audio_bytes.seek(0)
-                    st.audio(audio_bytes, format="audio/mp3")
-                    st.success("🎧 Voice generated successfully!")
-                except Exception as e:
-                    st.warning("⚠️ Could not generate voice output.")
-                    st.exception(e)
-else:
-    st.info("कृपया PDF अपलोड करें या टेक्स्ट पेस्ट करें।")
+            # Voice Support (available for all languages)
+            try:
+                lang_code = lang_codes.get(language, "hi")
+                # Special handling for Odia
+                if language == "Odia":
+                    st.info("🔊 Voice output for Odia will be in Hindi due to technical limitations.")
+                
+                tts = gTTS(output, lang=lang_code)
+                audio_bytes = BytesIO()
+                tts.write_to_fp(audio_bytes)
+                audio_bytes.seek(0)
+                st.audio(audio_bytes, format="audio/mp3")
+            except Exception as e:
+                st.warning("⚠️ Could not generate voice output for this language.")
+                # Don't show the full exception to users, just log it
+                print(f"Voice generation error: {e}")
+
+# Main Logic
+if input_method == "Upload PDF or Image":
+    # For upload method
+    if uploaded_file and text.strip():
+        # File uploaded and text extracted - automatically process
+        process_and_generate_output(text, language)
+    elif not uploaded_file:
+        # No file uploaded yet
+        st.info("📁 कृपया PDF या इमेज फ़ाइल अपलोड करें।")
+    elif uploaded_file and not text.strip():
+        # File uploaded but no text extracted
+        st.warning("⚠️ फ़ाइल से कोई टेक्स्ट नहीं मिला। कृपया दूसरी फ़ाइल का प्रयास करें।")
+        
+elif input_method == "Paste Text":
+    # For paste text method - always show enabled button for better UX
+    if st.button(f"🧠 Explain in {language}"):
+        if text.strip():
+            # Text is available - process it
+            process_and_generate_output(text, language)
+        else:
+            # No text entered - show error message
+            st.error("⚠️ कृपया पहले टेक्स्ट बॉक्स में कुछ लिखें या पेस्ट करें।")
+    
+    # Show helper text when no text is entered
+    if not text.strip():
+        st.info("✏️ कृपया ऊपर के बॉक्स में अपना टेक्स्ट लिखें या पेस्ट करें, फिर 'Explain' बटन दबाएं।")
 
 footer_html = """
 <style>

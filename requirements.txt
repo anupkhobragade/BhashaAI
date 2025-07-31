@@ -6,3 +6,7 @@ Pillow
 gTTS
 fpdf
 reportlab
+easyocr
+opencv-python
+pdf2image
+PyMuPDF

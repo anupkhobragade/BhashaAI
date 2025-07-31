@@ -4,7 +4,13 @@ import streamlit as st
 from PIL import Image
 
 # Sidebar Navigation
-st.sidebar.image("bhasha_logo.png", width=150)
+st.sidebar.markdown("""
+<div style="text-align: center;">
+    <img src="data:image/gif;base64,{}" width="180">
+</div>
+""".format(
+    __import__('base64').b64encode(open("bhasha_logo.gif", "rb").read()).decode()
+), unsafe_allow_html=True)
 
 # Page config
 st.set_page_config(page_title="BhashaAI – भारत का अपना ChatGPT", layout="centered")
@@ -22,26 +28,29 @@ st.markdown("""
 # About Section
 st.markdown("""
 #### ℹ️ About BhashaAI  
-**BhashaAI** is your local Indian language AI assistant. It explains English content and government/legal documents in **Hindi, Marathi, Bengali, Tamil, Telugu, Kannada, and more**, so that every citizen can understand them with ease.
+**BhashaAI** is your local Indian language AI assistant. It explains English content, government/legal documents, and **extracts text from images and PDFs** in **Hindi, Marathi, Bengali, Tamil, Telugu, Kannada, and more**, so that every citizen can understand them with ease.
 """)
 
 # Who it's for
 st.markdown("""
 #### 🎯 Who is it for?
 - 👵 Senior Citizens struggling with English  
-- 👨‍🌾 Farmers receiving government letters  
-- 🧑‍🎓 Students dealing with academic PDFs  
-- 🧾 Anyone confused by legal or official forms  
+- 👨‍🌾 Farmers receiving government letters or scanned documents
+- 🧑‍🎓 Students dealing with academic PDFs and image-based content
+- 🧾 Anyone confused by legal or official forms
+- 📱 Users with image-based documents that need translation
 """)
 
 # New Features
 st.markdown("""
-#### 🔈 New Features:
-- 📄 PDF + Text input supported  
-- 🌐 Translates to **10 different Indian languages**  
-- 🔊 Includes **Text-to-Speech** output
-- 🖨️ Save translated Hindi/Marathi output as **PDF**  
-- ✅ 100 percent Free and No Login Needed  
+#### ✨ Key Features:
+- 📄 **Smart PDF Processing**: Handles both text-based and image-based PDFs automatically
+- 🖼️ **OCR Technology**: Extract text from images (JPG, PNG, BMP) with advanced recognition
+- 🌐 **10 Indian Languages**: Translates to Hindi, Marathi, Bengali, Tamil, Telugu, and more
+- 🔊 **Text-to-Speech**: Listen to translations in your preferred language
+- 🖨️ **PDF Export**: Save Hindi/Marathi translations as downloadable PDFs
+- ⚡ **Auto-Processing**: Instant translation for uploaded files
+- ✅ **100% Free**: No login required, completely free to use
 """)
 
 # Supported languages (compact 2-column layout)
