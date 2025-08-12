@@ -239,16 +239,90 @@ st.sidebar.markdown("**Languages:** English + Indian languages")
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**Today's Visitors:** {get_today_count()}")
 
-# Inject PWA meta tags
+# Inject PWA meta tags and service worker
 st.markdown("""
-<link rel="manifest" href="/manifest.json">
-<link rel="icon" href="/icon-192.png">
-<meta name="theme-color" content="#0b5cd1">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icon-192.png">
+<meta name="theme-color" content="#FF671F">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="BhashaAI">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+""", unsafe_allow_html=True)
+
+# Service Worker Registration
+st.markdown("""
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/static/sw.js')
+      .then(function(registration) {
+        console.log('BhashaAI: Service Worker registered successfully:', registration.scope);
+      })
+      .catch(function(error) {
+        console.log('BhashaAI: Service Worker registration failed:', error);
+      });
+  });
+}
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  console.log('BhashaAI: PWA install prompt ready');
+});
+</script>
+""", unsafe_allow_html=True)
+
+# Keep-Alive Mechanism (separate script)
+st.markdown("""
+<script>
+(function() {
+  let keepAliveInterval;
+  let lastActivity = Date.now();
+  const KEEP_ALIVE_INTERVAL = 25 * 60 * 1000;
+  const ACTIVITY_TIMEOUT = 30 * 60 * 1000;
+
+  function sendKeepAlive() {
+    if (Date.now() - lastActivity < ACTIVITY_TIMEOUT) {
+      fetch(window.location.href, {
+        method: 'HEAD',
+        cache: 'no-cache'
+      }).then(() => {
+        console.log('Keep-alive ping sent at', new Date().toLocaleTimeString());
+      }).catch(err => {
+        console.log('Keep-alive ping failed:', err);
+      });
+    }
+  }
+
+  function updateActivity() {
+    lastActivity = Date.now();
+  }
+
+  ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'].forEach(event => {
+    document.addEventListener(event, updateActivity, true);
+  });
+
+  keepAliveInterval = setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL);
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        console.log('Keep-alive paused (tab hidden)');
+      }
+    } else {
+      updateActivity();
+      keepAliveInterval = setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL);
+      console.log('Keep-alive resumed (tab visible)');
+    }
+  });
+
+  console.log('Keep-alive mechanism initialized');
+})();
+</script>
 """, unsafe_allow_html=True)
 
 # App Header
@@ -259,6 +333,166 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Install App Button (positioned separately to avoid conflicts)
+st.markdown("""
+<style>
+.install-btn-container {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 9999;
+}
+
+.install-app-btn {
+    display: none; /* Hidden by default, shown when PWA is installable */
+    background: linear-gradient(45deg, #FF671F, #046A38);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+}
+
+.install-app-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Mobile specific positioning */
+@media (max-width: 768px) {
+    .install-btn-container {
+        top: 5px;
+        right: 5px;
+    }
+    .install-app-btn {
+        padding: 6px 12px;
+        font-size: 10px;
+    }
+}
+</style>
+
+<div class="install-btn-container">
+    <button id="install-app-btn" class="install-app-btn">
+        📱 Install App
+    </button>
+</div>
+
+<script>
+// Enhanced PWA Install functionality
+let deferredPrompt;
+const installBtn = document.getElementById('install-app-btn');
+
+console.log('PWA Install script loaded');
+
+// Function to show install button
+function showInstallButton() {
+    if (installBtn) {
+        installBtn.style.display = 'inline-block';
+        console.log('Install button shown');
+    }
+}
+
+// Function to hide install button
+function hideInstallButton() {
+    if (installBtn) {
+        installBtn.style.display = 'none';
+        console.log('Install button hidden');
+    }
+}
+
+// Check if app is already installed
+function isPWAInstalled() {
+    // Check if running in standalone mode
+    return window.matchMedia('(display-mode: standalone)').matches || 
+           window.navigator.standalone === true ||
+           document.referrer.includes('android-app://');
+}
+
+// Listen for the beforeinstallprompt event
+window.addEventListener('beforeinstallprompt', (e) => {
+    console.log('beforeinstallprompt event fired');
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later
+    deferredPrompt = e;
+    // Show the install button only if not already installed
+    if (!isPWAInstalled()) {
+        showInstallButton();
+    }
+});
+
+// Handle install button click
+if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+        console.log('Install button clicked');
+        if (deferredPrompt) {
+            try {
+                // Show the install prompt
+                deferredPrompt.prompt();
+                
+                // Wait for the user to respond to the prompt
+                const { outcome } = await deferredPrompt.userChoice;
+                
+                console.log('PWA install result:', outcome);
+                
+                // We've used the prompt, and can't use it again, throw it away
+                deferredPrompt = null;
+                
+                // Hide the install button
+                hideInstallButton();
+            } catch (error) {
+                console.error('Error during PWA installation:', error);
+            }
+        } else {
+            console.log('No deferred prompt available');
+            // Fallback: try to guide user manually
+            alert('To install this app:\\n\\n1. Click the menu (⋮) in your browser\\n2. Look for "Install app" or "Add to Home screen"\\n3. Follow the prompts');
+        }
+    });
+}
+
+// Hide button if app is already installed
+window.addEventListener('appinstalled', () => {
+    hideInstallButton();
+    console.log('BhashaAI PWA was installed');
+});
+
+// Check on page load if already running as PWA
+if (isPWAInstalled()) {
+    hideInstallButton();
+    console.log('App already installed, hiding button');
+} else {
+    console.log('App not installed, waiting for install prompt');
+    // For testing on localhost, show button after 2 seconds
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        setTimeout(() => {
+            console.log('Localhost detected: Showing install button for testing');
+            showInstallButton();
+        }, 2000);
+    }
+}
+
+// Additional check for iOS Safari
+if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+    // iOS doesn't support beforeinstallprompt, so show button manually
+    if (!isPWAInstalled()) {
+        showInstallButton();
+        console.log('iOS detected, showing install button');
+        
+        // Custom handler for iOS
+        if (installBtn) {
+            installBtn.addEventListener('click', () => {
+                alert('To install on iOS:\\n\\n1. Tap the Share button (📤) at the bottom\\n2. Scroll down and tap "Add to Home Screen"\\n3. Tap "Add" to confirm');
+            });
+        }
+    }
+}
+</script>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <div style='text-align: center; margin-bottom: 20px;'>
     <p style='margin: 5px 0; font-size: 16px;'>Simplify forms, legal docs, and English content in <strong>your preferred Indian language</strong>.</p>
@@ -266,7 +500,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Language options
-language = st.selectbox("🗣️ Output Language", [
+language = st.selectbox("🗣️ Select Output Language", [
     "Hindi", "Marathi", "Bengali", "Telugu", "Tamil",
     "Urdu", "Gujarati", "Malayalam", "Kannada", "Odia"
 ])
@@ -281,7 +515,7 @@ if input_method == "Upload PDF or Image":
 
 # Handle input
 if input_method == "Upload PDF or Image":
-    uploaded_file = st.file_uploader("Upload a PDF or Image file", type=["pdf", "jpg", "jpeg", "png", "bmp", "tiff"])
+    uploaded_file = st.file_uploader("Upload a PDF or Image file", type=["pdf", "jpg", "jpeg", "png"])
     if uploaded_file:
         file_type = uploaded_file.type
         
@@ -841,6 +1075,38 @@ elif input_method == "Paste Text":
     if not text.strip():
         st.info("✏️ कृपया ऊपर के बॉक्स में अपना टेक्स्ट लिखें या पेस्ट करें, फिर 'Explain' बटन दबाएं।")
 
+# Keep-Alive Status Indicator
+st.markdown("""
+<div style='position: fixed; bottom: 80px; right: 10px; z-index: 999; opacity: 0.7;'>
+    <div id="keep-alive-status" style='
+        background: linear-gradient(45deg, #4CAF50, #45a049);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        display: none;
+    '>
+        🟢 Keep-Alive Active
+    </div>
+</div>
+
+<script>
+// Show keep-alive status
+setTimeout(() => {
+    const statusEl = document.getElementById('keep-alive-status');
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        setTimeout(() => {
+            statusEl.style.opacity = '0.5';
+        }, 3000);
+    }
+}, 2000);
+</script>
+""", unsafe_allow_html=True)
+
+# Footer section only
 footer_html = """
 <style>
 .footer {
