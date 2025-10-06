@@ -19,7 +19,7 @@ def query_groq(prompt, language="Hindi"):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "llama3-70b-8192",
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": f"You are a helpful assistant who explains content in {language}."},
             {"role": "user", "content": prompt}
