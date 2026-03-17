@@ -106,7 +106,7 @@ footer_html = """
     📬 Contact: <a href='mailto:anupkhobragade@gmail.com'>anupkhobragade@gmail.com</a> |
     <a href="https://twitter.com/anupkhobragade" target="_blank">Twitter</a> |
     <a href="https://www.linkedin.com/in/anup-khobragade" target="_blank">LinkedIn</a><br>
-    Proudly developed in Pune, India 🇮🇳  |  © 2025 BhashaAI. All rights reserved.
+    Proudly developed in Pune, India 🇮🇳  |  © 2026 BhashaAI. All rights reserved.
 </div>
 """
 st.markdown(footer_html, unsafe_allow_html=True)
