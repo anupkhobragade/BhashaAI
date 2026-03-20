@@ -23,6 +23,31 @@
 
 👉 [Launch BhashaAI on Streamlit](https://bhashaai.streamlit.app/app)
 
+
+## ⚙️ Keep-Alive on GitHub Actions
+
+If you keep BhashaAI deployed on Streamlit Community Cloud, this repo now includes a GitHub Actions workflow that sends a request to the live app every 5 minutes to reduce the chance of the app going to sleep.
+
+### Workflow details
+
+- Workflow file: `.github/workflows/keep-streamlit-awake.yml`
+- Target URL: `https://bhashaai.streamlit.app/app`
+- Trigger: every 5 minutes, plus manual `workflow_dispatch`
+- Request behavior: sends a browser-like GET request to the Streamlit app URL and fails the workflow if GitHub cannot reach the app successfully
+
+### Setup
+
+1. Push this repository to GitHub.
+2. Open the **Actions** tab and enable workflows if GitHub asks.
+3. Run **Keep Streamlit app awake** once manually to verify the ping succeeds.
+4. Keep GitHub Actions enabled for the repository.
+
+### Important notes
+
+- This is a practical keep-alive approach for the current `bhashaai.streamlit.app` deployment, but it is not a hard uptime guarantee if the hosting platform restarts or changes its hibernation behavior.
+- GitHub may disable scheduled workflows in repositories that stay inactive for long periods, so check the Actions tab if the pings ever stop.
+- If the workflow starts failing with HTTP 403 or similar access errors, GitHub-hosted runners may be blocked from reaching the app; in that case, switch to a dedicated uptime service or a self-hosted runner.
+
 ## ⚙️ Keep-Alive on Render
 
 If you deploy BhashaAI on Render's free or spin-down-prone infrastructure, the web service can go idle after a period of inactivity. This repo now includes a Render cron job that pings the live app every 5 minutes to reduce cold starts.
