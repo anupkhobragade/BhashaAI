@@ -12,8 +12,6 @@ import requests
 import pdfplumber
 from gtts import gTTS
 from textwrap import wrap
-import easyocr
-import cv2
 import numpy as np
 from PIL import Image
 import tempfile
@@ -66,6 +64,7 @@ def get_font_for_language(language):
 def get_ocr_reader():
     """Initialize and cache OCR reader"""
     try:
+        import easyocr
         # Support only English and Hindi for maximum compatibility
         reader = easyocr.Reader(['en', 'hi'], gpu=False)
         return reader
@@ -510,8 +509,6 @@ text = ""
 
 # Initialize OCR reader
 ocr_reader = None
-if input_method == "Upload PDF or Image":
-    ocr_reader = get_ocr_reader()
 
 # Handle input
 if input_method == "Upload PDF or Image":
@@ -525,6 +522,7 @@ if input_method == "Upload PDF or Image":
             
             # Check if PDF is image-based or text-based
             if is_pdf_image_based(pdf_bytes):
+                ocr_reader = get_ocr_reader()
                 text = extract_text_from_image_pdf(pdf_bytes, ocr_reader)
             else:
                 try:
@@ -534,11 +532,13 @@ if input_method == "Upload PDF or Image":
                             if page_text:
                                 text += page_text
                 except Exception as e:
+                    ocr_reader = get_ocr_reader()
                     text = extract_text_from_image_pdf(pdf_bytes, ocr_reader)
         
         else:
             # Handle image file
             try:
+                ocr_reader = get_ocr_reader()
                 # Display a small thumbnail of the uploaded image
                 image = Image.open(uploaded_file)
                 

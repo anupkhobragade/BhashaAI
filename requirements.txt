@@ -7,6 +7,6 @@ gTTS
 fpdf
 reportlab
 easyocr
-opencv-python
+opencv-python-headless
 pdf2image
 PyMuPDF
