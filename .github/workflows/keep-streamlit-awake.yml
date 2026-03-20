@@ -1,0 +1,51 @@
+name: Keep Streamlit app awake
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+env:
+  STREAMLIT_KEEPALIVE_URL: https://bhashaai.streamlit.app/app
+
+jobs:
+  ping-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the Streamlit app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import urllib.error
+          import urllib.request
+          from datetime import datetime, timezone
+
+          url = os.environ["STREAMLIT_KEEPALIVE_URL"]
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+              "Accept-Language": "en-US,en;q=0.9",
+              "Cache-Control": "no-cache",
+              "Pragma": "no-cache",
+          }
+          request = urllib.request.Request(url, headers=headers)
+          timestamp = datetime.now(timezone.utc).isoformat()
+
+          print(f"[{timestamp}] Pinging {url}")
+
+          try:
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  body = response.read()
+                  print(f"Status: {response.status}")
+                  print(f"Final URL: {response.geturl()}")
+                  print(f"Downloaded bytes: {len(body)}")
+                  if response.status < 200 or response.status >= 400:
+                      raise SystemExit(f"Unexpected status code: {response.status}")
+          except urllib.error.HTTPError as exc:
+              raise SystemExit(f"HTTP error from keep-alive ping: {exc.code}") from exc
+          except urllib.error.URLError as exc:
+              raise SystemExit(f"URL error from keep-alive ping: {exc.reason}") from exc
+          PY
