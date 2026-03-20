@@ -3,7 +3,19 @@ services:
     name: bhashaai
     runtime: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "streamlit run pages/app.py"
+    startCommand: "streamlit run pages/app.py --server.port $PORT --server.address 0.0.0.0"
     envVars:
       - key: GROQ_API_KEY
         sync: false  # You will set it manually in the Render dashboard
+
+  - type: cron
+    name: bhashaai-keepalive
+    runtime: python
+    schedule: "*/5 * * * *"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python keep_alive.py"
+    envVars:
+      - key: KEEP_ALIVE_URL
+        sync: false  # Set this to your live Render URL or custom domain
+      - key: KEEP_ALIVE_TIMEOUT
+        value: "30"
